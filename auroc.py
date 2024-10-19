@@ -43,6 +43,50 @@ def create_fold_change_df(cluster_1_cells, fold_change, log_fold_change, label):
     })
     return fc_df.sort_values(by=f'{label}_Fold_Change', ascending=False)
 
+def plot_scatter_with_labels(result, output_file, label):
+    """
+    Plots a scatter plot with gene labels for points where the absolute x-value is greater than 1.
+    
+    Parameters:
+    result (pd.DataFrame): The dataframe containing 'Control_Log2_Fold_Change', 'logFC', and 'Gene' columns.
+    output_file (str): The file path to save the output plot. Default is 'scatter_plot.jpg'.
+    
+    Returns:
+    None: Displays and saves the scatter plot.
+    """
+    
+    # Create the scatter plot
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(data=result, x='Temp_Log2_Fold_Change', y='logFC')
+    
+    # Add gene labels for significant points
+    for i in range(len(result)):
+        x_val = result['Temp_Log2_Fold_Change'][i]
+        y_val = result['logFC'][i]
+        if abs(x_val) > 1:
+            plt.text(
+                x_val, 
+                y_val, 
+                result['Gene'][i],
+                fontsize=9,
+                ha='right'  # horizontal alignment
+            )
+    
+    # Set x-axis limits based on the maximum absolute value of 'Control_Log2_Fold_Change'
+    max_x = max(abs(result['Temp_Log2_Fold_Change'].min()), abs(result['Temp_Log2_Fold_Change'].max()))
+    plt.xlim(-max_x-1, max_x+1) 
+    
+    # Add labels, title, and reference lines
+    plt.xlabel(f'{label} In Silico Log2 Fold Change')
+    plt.ylabel('Functional Log2 Fold Change')
+    plt.title(f'{label} vs Functional Log2 Fold Changes by Gene')
+    
+    plt.axvline(x=0, color='red', linestyle='--', linewidth=1)
+    plt.axhline(y=0, color='red', linestyle='--', linewidth=1)
+    
+    # Save and display the plot
+    plt.savefig(output_file, bbox_inches='tight', dpi=300)
+
 goi_list= ["Tcf4"]  # Genes of interest
 sample_list= ["1", "2", "3"]        # Sample numbers
 region_list= ["CR", "Excit_L2_IT_ENTl", "Excit_L5_PT_CTX", "Excit_L5IT", "Excit_L5NP_CTX", "Excit_L6CT_CTX", "Excit_L6IT", "Excit_Upper", "Inhib_Sst"]
@@ -81,11 +125,12 @@ for goi in goi_list:
                 cluster_1 = oracle_count[oracle_count.obs['predicted.subclass'] == azimuth_region]
                 cluster_2 = oracle_input[oracle_input.obs['predicted.subclass'] == azimuth_region]
                 fold_change, log_fold_change = calculate_fold_changes(cluster_1, cluster_2)
-                oracle_fc_df = create_fold_change_df(cluster_1, fold_change, log_fold_change, 'PerturbSeq')
+                oracle_fc_df = create_fold_change_df(cluster_1, fold_change, log_fold_change, 'Temp')
                 result = pd.merge(oracle_fc_df, DEG, on="Gene", how="inner")
-                result = result[result['PerturbSeq_Log2_Fold_Change'] != 0]
-                
-                temp_fc = result['PerturbSeq_Log2_Fold_Change']
+                result = result[result['Temp_Log2_Fold_Change'] != 0]
+                result.reset_index(drop=True, inplace=True)
+
+                temp_fc = result['Temp_Log2_Fold_Change']
                 functional_fc = result['logFC']  # LogFC from functional perturbations
                 
                 temp_class = [1 if fc > 0 else 0 for fc in temp_fc]
@@ -100,14 +145,17 @@ for goi in goi_list:
                     perturb_fpr = temp_fpr
                     perturb_tpr = temp_tpr
                     perturb_roc_auc = temp_roc_auc
+                    plot_scatter_with_labels(result, f"/gpfs/home/asun/jinlab/graphs/scatterplot/{goi}_{sample}_{region}_{name}_scatter.jpg", "PerturbSeq")
                 elif j == 1:
                     ctrl_fpr = temp_fpr
                     ctrl_tpr = temp_tpr
                     ctrl_roc_auc = temp_roc_auc
+                    plot_scatter_with_labels(result, f"/gpfs/home/asun/jinlab/graphs/scatterplot/{goi}_{sample}_{region}_{name}_scatter.jpg", "Ctrl")
                 else:
                     goi_fpr = temp_fpr
                     goi_tpr = temp_tpr
                     goi_roc_auc = temp_roc_auc
+                    plot_scatter_with_labels(result, f"/gpfs/home/asun/jinlab/graphs/scatterplot/{goi}_{sample}_{region}_{name}_scatter.jpg", goi)
 
             plt.figure()
             songpeng_region = songpeng_regions[i]
@@ -179,5 +227,5 @@ for goi in goi_list:
             plt.ylabel('True Positive Rate')
             plt.title(f'AUROC for {goi} Perturbation in {region}')
             plt.legend(loc="lower right")
-            plt.savefig(f"/gpfs/home/asun/jinlab/graphs/{goi}_{sample}_{region}_auroc.jpg", bbox_inches='tight')
+            plt.savefig(f"/gpfs/home/asun/jinlab/graphs/auroc/{goi}_{sample}_{region}_auroc.jpg", bbox_inches='tight', dpi=300)
                 
